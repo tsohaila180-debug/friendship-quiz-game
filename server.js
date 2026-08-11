@@ -9,15 +9,10 @@ const io = new Server(server, {
   cors: { origin: "*" }
 });
 
-// خدمة ملفات مجلد public مباشرة
+// تقديم جميع ملفات مجلد public تلقائياً (index.html, style.css, script.js)
 app.use(express.static(path.join(__dirname, 'public')));
-app.use('/static', express.static(path.join(__dirname, 'public')));
 
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// بنك الأسئلة الشخصية والمضحكة للتوافق
+// بنك الأسئلة
 const QUESTION_BANK = [
   { question: "من هو الشخص الأقرب إليك عندما تحتاج لنصيحة صادقة؟ 💡", choices: ["صديقي المفضّل", "والداي / عائلتي", "نفسي وأفكاري", "أبحث في جوجل/الإنترنت"] },
   { question: "ما هو تصرفك المفاجئ إذا رأيت صرصوراً طائراً؟ 🪳💥", choices: ["الصراخ والجري للغرفة المجاورة", "القتال بشجاعة حتى النصر", "التجمد في مكاني من الصدمة", "الاستعانة بصديق/فرد من العائلة"] },
