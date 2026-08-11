@@ -9,8 +9,13 @@ const io = new Server(server, {
   cors: { origin: "*" }
 });
 
-// تقديم جميع ملفات مجلد public تلقائياً (index.html, style.css, script.js)
+// خدمة جميع ملفات مجلد public
 app.use(express.static(path.join(__dirname, 'public')));
+
+// توجيه المسار الرئيسي إلى ملف index.html مباشرة
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 // بنك الأسئلة
 const QUESTION_BANK = [
