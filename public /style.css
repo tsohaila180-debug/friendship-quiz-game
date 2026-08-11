@@ -1,132 +1,196 @@
-const socket = io();
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+const path = require('path');
 
-const screens = {
-  welcome: document.getElementById('screen-welcome'),
-  waiting: document.getElementById('screen-waiting'),
-  question: document.getElementById('screen-question'),
-  result: document.getElementById('screen-result'),
-  gameOver: document.getElementById('screen-game-over')
-};
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: { origin: "*" }
+});
 
-let myPlayerName = "";
+// خدمة جميع الملفات الثابتة في الجذر والمجلدات
+app.use(express.static(__dirname));
+app.use(express.static(path.join(__dirname, 'public')));
 
-function showScreen(screenKey) {
-  Object.values(screens).forEach(screen => screen.classList.remove('active'));
-  screens[screenKey].classList.add('active');
+// فتح index.html مباشرة
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// بنك الأسئلة
+const QUESTION_BANK = [
+  { question: "من هو الشخص الأقرب إليك عندما تحتاج لنصيحة صادقة؟ 💡", choices: ["صديقي المفضّل", "والداي / عائلتي", "نفسي وأفكاري", "أبحث في جوجل/الإنترنت"] },
+  { question: "ما هو تصرفك المفاجئ إذا رأيت صرصوراً طائراً؟ 🪳💥", choices: ["الصراخ والجري للغرفة المجاورة", "القتال بشجاعة حتى النصر", "التجمد في مكاني من الصدمة", "الاستعانة بصديق/فرد من العائلة"] },
+  { question: "إذا طلب منك صديقك مشاركته آخر قطعة بيتزا، ماذا تفعل؟ 🍕✨", choices: ["أعطيها له بحب وابتسامة", "نقسمها بالنصف بالضبط", "آكلها بسرعة قبل أن ينتبه!", "أطلب بيتزا جديدة للجميع"] },
+  { question: "ما هي أسلوبك المفضل لقضاء ويك إند مثالي؟ 🏖️🍿", choices: ["النوم والمتابعة تحت البطانية", "الخروج مع الأصدقاء والمغامرة", "التسوق وطلب الأكل اللذيذ", "العمل على مشروع شخصي/دراسة"] },
+  { question: "لو استيقظت ووجدت نفسك بحساب بنكي فيه مليون دولار، أول شيء تفعله؟ 💰✨", choices: ["حجز طيران وسفر فوراً", "شراء كل الأغراض في قائمة أمنياتي", "إهداء أصدقائي وعائلتي هدايا", "استثمار المبلغ والهدوء"] },
+  { question: "ما هو الموقف الأكثر إحراجاً بالنسبة لك؟ 🙈", choices: ["التعثر والسقوط أمام ناس كثيرين", "نداء شخص باسم خاطئ بثقة", "إرسال رسالة للشخص الخطأ", "نسيان اسم شخص يحييك بحرارة"] },
+  { question: "إذا أردتم التخطيط لمشروع أو رحلة، ما هو دورك في المجموعة؟ 🗺️✨", choices: ["المنظم والمخطط لكل التفاصيل", "المتحمس الذي يوافق على أي شيء", "الذي يكتفي بالحضور والتذوق", "الذي يتأخر دائماً عن الموعد"] },
+  { question: "لو كنت تمتلك قوة خارقة واحدة، ماذا تختار؟ 🦸‍♂️✨", choices: ["الطيران واكتشاف العالم", "قراءة الأفكار", "التنقل الخاطف للأماكن", "الإخفاء والتسلل"] }
+];
+
+const rooms = {};
+
+function generateRoomCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  let code = '';
+  for (let i = 0; i < 4; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
 }
 
-function showAlert(msg) {
-  document.getElementById('alert-msg').innerText = msg;
-  document.getElementById('custom-alert').classList.remove('hidden');
-}
+io.on('connection', (socket) => {
+  socket.on('createRoom', ({ playerName }) => {
+    let roomCode = generateRoomCode();
+    while (rooms[roomCode]) {
+      roomCode = generateRoomCode();
+    }
 
-document.getElementById('btn-alert-ok').addEventListener('click', () => {
-  document.getElementById('custom-alert').classList.add('hidden');
-});
-
-// 1. إنشاء غرفة
-document.getElementById('btn-create-room').addEventListener('click', () => {
-  const name = document.getElementById('player-name').value.trim();
-  if (!name) return showAlert("يرجى إدخال اسمك اللطيف أولاً! 🌼");
-  
-  myPlayerName = name;
-  socket.emit('createRoom', { playerName: name });
-});
-
-// 2. دخول غرفة
-document.getElementById('btn-join-room').addEventListener('click', () => {
-  const name = document.getElementById('player-name').value.trim();
-  const code = document.getElementById('room-code-input').value.trim();
-  
-  if (!name) return showAlert("يرجى إدخال اسمك اللطيف أولاً! 🌼");
-  if (!code) return showAlert("يرجى كتابة رمز الغرفة! 🌊");
-  
-  myPlayerName = name;
-  socket.emit('joinRoom', { playerName: name, roomCode: code });
-});
-
-socket.on('roomCreated', ({ roomCode }) => {
-  document.getElementById('room-code-display').innerText = roomCode;
-  showScreen('waiting');
-});
-
-document.getElementById('btn-copy-code').addEventListener('click', () => {
-  const code = document.getElementById('room-code-display').innerText;
-  navigator.clipboard.writeText(code);
-  showAlert("تم نسخ الرمز بنجاح! 📋");
-});
-
-// 3. بدء اللعب والسؤال
-socket.on('gameStarted', () => {
-  showScreen('question');
-});
-
-socket.on('nextQuestion', ({ questionIndex, totalQuestions, question, choices }) => {
-  showScreen('question');
-  document.getElementById('waiting-opponent-badge').classList.add('hidden');
-  
-  document.getElementById('question-number-text').innerText = `السؤال ${questionIndex} من ${totalQuestions}`;
-  document.getElementById('question-text').innerText = question;
-  
-  const fillPct = (questionIndex / totalQuestions) * 100;
-  document.getElementById('progress-fill').style.width = `${fillPct}%`;
-
-  const choicesContainer = document.getElementById('choices-container');
-  choicesContainer.innerHTML = "";
-
-  choices.forEach((choice, index) => {
-    const btn = document.createElement('button');
-    btn.className = 'choice-btn';
-    btn.innerHTML = `<span>${choice}</span> <span>🌼</span>`;
-    btn.onclick = () => {
-      document.querySelectorAll('.choice-btn').forEach(b => b.classList.remove('selected'));
-      btn.classList.add('selected');
-      socket.emit('submitAnswer', { choiceIndex: index });
+    rooms[roomCode] = {
+      code: roomCode,
+      players: [{ id: socket.id, name: playerName, score: 0 }],
+      currentQuestionIndex: 0,
+      p1Answer: null,
+      p2Answer: null,
+      status: 'waiting'
     };
-    choicesContainer.appendChild(btn);
+
+    socket.join(roomCode);
+    socket.roomCode = roomCode;
+    socket.emit('roomCreated', { roomCode, player: rooms[roomCode].players[0] });
+  });
+
+  socket.on('joinRoom', ({ playerName, roomCode }) => {
+    const code = roomCode.toUpperCase();
+    const room = rooms[code];
+
+    if (!room) {
+      return socket.emit('errorMsg', 'رمز الغرفة غير صحيح! 🐥');
+    }
+    if (room.players.length >= 2) {
+      return socket.emit('errorMsg', 'الغرفة ممتلئة باللاعبين! 🌊');
+    }
+
+    const newPlayer = { id: socket.id, name: playerName, score: 0 };
+    room.players.push(newPlayer);
+    room.status = 'playing';
+    socket.join(code);
+    socket.roomCode = code;
+
+    io.to(code).emit('gameStarted', {
+      players: room.players,
+      questionCount: QUESTION_BANK.length
+    });
+
+    sendQuestion(room);
+  });
+
+  function sendQuestion(room) {
+    const qData = QUESTION_BANK[room.currentQuestionIndex];
+    room.p1Answer = null;
+    room.p2Answer = null;
+
+    io.to(room.code).emit('nextQuestion', {
+      questionIndex: room.currentQuestionIndex + 1,
+      totalQuestions: QUESTION_BANK.length,
+      question: qData.question,
+      choices: qData.choices
+    });
+  }
+
+  socket.on('submitAnswer', ({ choiceIndex }) => {
+    const room = rooms[socket.roomCode];
+    if (!room || room.status !== 'playing') return;
+
+    if (room.players[0].id === socket.id) {
+      room.p1Answer = choiceIndex;
+    } else if (room.players[1].id === socket.id) {
+      room.p2Answer = choiceIndex;
+    }
+
+    socket.emit('answerReceived');
+
+    if (room.p1Answer !== null && room.p2Answer !== null) {
+      const isMatch = room.p1Answer === room.p2Answer;
+      if (isMatch) {
+        room.players[0].score += 10;
+        room.players[1].score += 10;
+      }
+
+      const qData = QUESTION_BANK[room.currentQuestionIndex];
+
+      io.to(room.code).emit('questionResult', {
+        isMatch,
+        p1: { name: room.players[0].name, answerText: qData.choices[room.p1Answer] },
+        p2: { name: room.players[1].name, answerText: qData.choices[room.p2Answer] },
+        matchCount: room.players[0].score / 10,
+        scores: room.players.map(p => ({ name: p.name, score: p.score }))
+      });
+    }
+  });
+
+  socket.on('nextStep', () => {
+    const room = rooms[socket.roomCode];
+    if (!room) return;
+
+    room.currentQuestionIndex++;
+
+    if (room.currentQuestionIndex < QUESTION_BANK.length) {
+      sendQuestion(room);
+    } else {
+      room.status = 'over';
+      const totalScore = room.players[0].score;
+      const maxScore = QUESTION_BANK.length * 10;
+      const percentage = Math.round((totalScore / maxScore) * 100);
+
+      let title = "صداقة لطيفة! 🐥✨";
+      let desc = "تحتاجان لقضاء وقت أطول معاً للتعرف أكثر!";
+      
+      if (percentage >= 80) {
+        title = "توأم روح حقيقي! 👑🌊";
+        desc = "عقولكم وتفكيركم متطابقان تماماً! تناغم رهيب وسريع!";
+      } else if (percentage >= 50) {
+        title = "أصدقاء مقربون رائعون! 🤝💛";
+        desc = "تتشاركون الكثير من الأفكار واللحظات الممتعة!";
+      }
+
+      io.to(room.code).emit('gameOver', {
+        totalScore,
+        maxScore,
+        percentage,
+        title,
+        desc
+      });
+    }
+  });
+
+  socket.on('restartGame', () => {
+    const room = rooms[socket.roomCode];
+    if (!room) return;
+
+    room.players.forEach(p => p.score = 0);
+    room.currentQuestionIndex = 0;
+    room.status = 'playing';
+
+    io.to(room.code).emit('gameStarted', {
+      players: room.players,
+      questionCount: QUESTION_BANK.length
+    });
+
+    sendQuestion(room);
+  });
+
+  socket.on('disconnect', () => {
+    if (socket.roomCode && rooms[socket.roomCode]) {
+      io.to(socket.roomCode).emit('playerDisconnected', 'غادر صديقك اللعبة! 🐥');
+      delete rooms[socket.roomCode];
+    }
   });
 });
 
-socket.on('answerReceived', () => {
-  document.getElementById('waiting-opponent-badge').classList.remove('hidden');
-  document.querySelectorAll('.choice-btn').forEach(b => b.style.pointerEvents = 'none');
-});
-
-// 4. إظهار النتيجة الجزئية للسؤال
-socket.on('questionResult', ({ isMatch, p1, p2 }) => {
-  showScreen('result');
-  const matchBox = document.getElementById('match-status');
-  
-  if (isMatch) {
-    matchBox.className = "match-status-box match";
-    matchBox.innerText = "تطابق تام! 🎉 +10 نقاط";
-  } else {
-    matchBox.className = "match-status-box no-match";
-    matchBox.innerText = "اختلاف طفيف في الآراء! 😄";
-  }
-
-  document.getElementById('p1-answer-label').innerHTML = `${p1.name}: <strong>${p1.answerText}</strong>`;
-  document.getElementById('p2-answer-label').innerHTML = `${p2.name}: <strong>${p2.answerText}</strong>`;
-});
-
-document.getElementById('btn-next-question').addEventListener('click', () => {
-  socket.emit('nextStep');
-});
-
-// 5. نهاية اللعبة
-socket.on('gameOver', ({ percentage, title, desc }) => {
-  showScreen('gameOver');
-  document.getElementById('game-over-title').innerText = title;
-  document.getElementById('game-over-percentage').innerText = `${percentage}%`;
-  document.getElementById('game-over-desc').innerText = desc;
-});
-
-document.getElementById('btn-restart').addEventListener('click', () => {
-  socket.emit('restartGame');
-});
-
-socket.on('errorMsg', (msg) => showAlert(msg));
-socket.on('playerDisconnected', (msg) => {
-  showAlert(msg);
-  showScreen('welcome');
+const PORT = process.env.PORT || 10000;
+server.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
 });
