@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
@@ -9,12 +10,20 @@ const io = new Server(server, {
   cors: { origin: "*" }
 });
 
-// خدمة جميع ملفات مجلد public
-app.use(express.static(path.join(__dirname, 'public')));
+// تحديد المسار الصحيح لمجلد public
+const publicPath = path.join(__dirname, 'public');
 
-// توجيه المسار الرئيسي إلى ملف index.html مباشرة
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+// خدمة الملفات الثابتة
+app.use(express.static(publicPath));
+
+// توجيه الصفحة الرئيسية لـ index.html مع التحقق من وجود الملف
+app.get('/', (req, res) => {
+  const indexPath = path.join(publicPath, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.send(`<h2>الموقع يعمل ولكن لم يتم العثور على index.html داخل مجلد public</h2>`);
+  }
 });
 
 // بنك الأسئلة
