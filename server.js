@@ -9,6 +9,8 @@ const io = new Server(server, {
   cors: { origin: "*" }
 });
 
+// خدمة ملفات مجلد public مباشرة
+app.use(express.static(path.join(__dirname, 'public')));
 app.use('/static', express.static(path.join(__dirname, 'public')));
 
 app.get('/', (req, res) => {
@@ -39,7 +41,6 @@ function generateRoomCode() {
 }
 
 io.on('connection', (socket) => {
-  // إنشاء غرفة
   socket.on('createRoom', ({ playerName }) => {
     let roomCode = generateRoomCode();
     while (rooms[roomCode]) {
@@ -60,7 +61,6 @@ io.on('connection', (socket) => {
     socket.emit('roomCreated', { roomCode, player: rooms[roomCode].players[0] });
   });
 
-  // انضمام للغرفة
   socket.on('joinRoom', ({ playerName, roomCode }) => {
     const code = roomCode.toUpperCase();
     const room = rooms[code];
@@ -99,7 +99,6 @@ io.on('connection', (socket) => {
     });
   }
 
-  // إرسال الإجابة
   socket.on('submitAnswer', ({ choiceIndex }) => {
     const room = rooms[socket.roomCode];
     if (!room || room.status !== 'playing') return;
@@ -112,7 +111,6 @@ io.on('connection', (socket) => {
 
     socket.emit('answerReceived');
 
-    // عند إجابة كلا اللاعبين
     if (room.p1Answer !== null && room.p2Answer !== null) {
       const isMatch = room.p1Answer === room.p2Answer;
       if (isMatch) {
@@ -132,7 +130,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // الانتقال للسؤال التالي
   socket.on('nextStep', () => {
     const room = rooms[socket.roomCode];
     if (!room) return;
@@ -168,7 +165,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // إعادة اللعب
   socket.on('restartGame', () => {
     const room = rooms[socket.roomCode];
     if (!room) return;
@@ -185,7 +181,6 @@ io.on('connection', (socket) => {
     sendQuestion(room);
   });
 
-  // انقطاع الاتصال
   socket.on('disconnect', () => {
     if (socket.roomCode && rooms[socket.roomCode]) {
       io.to(socket.roomCode).emit('playerDisconnected', 'غادر صديقك اللعبة! 🐥');
@@ -194,7 +189,7 @@ io.on('connection', (socket) => {
   });
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
